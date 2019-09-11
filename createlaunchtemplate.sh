@@ -1,57 +1,48 @@
 
-## example: ./createtemplate.sh -l <launchconfigname> -a <instancetype1> -b <instancetype2> -c <instancetype3> -d <instancetype4>
+## example: ./createlaunchtemplate.sh -l <launchconfigname> -i <instancetypes>
 ## This script will assume that AutoScalingGroupName matches to the IamInstanceProfile. If you need to however point to the autoscaling group of your choice, please update the AutoScalingGroupName down below.
 
 #!/bin/bash
 
-#while getopts ":y" _opt; do
-instancetype1=""
-instancetype2=""
-instancetype3=""
-instancetype4=""
-launchconfigname=""
+while getopts "l:i:" _opt; do
 
-while getopts "a:b:c:d:l:" _opt; do
+ case $_opt in
 
-  case $_opt in
+   l)
+       launchconfigname=$OPTARG
+         ;;
+    i)
+       instancetype=$OPTARG
+         ;;
+   \? | * | h )
 
-    a)
-      instancetype1=$OPTARG
-        ;;
-    b)
-       instancetype2=$OPTARG
-        ;;
-    c)
-         instancetype3=$OPTARG
-           ;;
-    d)
-         instancetype4=$OPTARG
-           ;;
-    l)
-        launchconfigname=$OPTARG
-          ;;
-    \? | * | h )
-
-      ;;
-  esac
+     ;;
+ esac
 done
 
-echo "instancetype1=$instancetype1"
-echo "instancetype2=$instancetype2"
-echo "instancetype3=$instancetype3"
-echo "instancetype4=$instancetype4"
+
 echo "LaunchTemplateName=$launchconfigname"
+echo "launchconfigname=$launchconfigname"
 
 ##-----
 ## main
 ##-----
-echo "launchconfigname=$launchconfigname"
+
 rawdata=$(aws autoscaling describe-launch-configurations --launch-configuration-name "$launchconfigname"  --query "LaunchConfigurations[][UserData,ImageId,InstanceType,KeyName,IamInstanceProfile]" --output text)
 userdata=$(echo "$rawdata" | awk '{print $1}')
 imageid=$(echo "$rawdata" | awk '{print $2}')
 instancetype=$(echo "$rawdata" | awk '{print $3}')
 keyname=$(echo "$rawdata" | awk '{print $4}')
 iaminstanceprofile=$(echo "$rawdata" | awk '{print $5}')
+instance=$(for instancetype in "$@"
+               do
+                echo "{
+                    \"InstanceType\": \"$instancetype\"
+                }"
+
+               done)
+
+INSTANCEDATA=$(echo "$instance" | jq '.' -s )
 
 # TODO: handle multiple SG
 #When we seperate Security Group from the previous query, we are getting correct format output we can use to create Launch Template. And we need to query for securoity group seperately and thats what we are doing below.
@@ -79,6 +70,7 @@ INPUT=$(cat << EOF
         "ImageId": "$imageid",
         "InstanceType": "$instancetype",
         "EbsOptimized": true,
+        "KeyName": "$keyname",
         "IamInstanceProfile": {
             "Name": "$iaminstanceprofile"
         },
@@ -131,7 +123,7 @@ aws ec2 create-launch-template --cli-input-json file://input.json
 #################################
 #LAUNCHTEMPLATEID=$(aws ec2 describe-launch-templates --launch-template-names $launchconfigname --query "LaunchTemplates[][LaunchTemplateId]" --output text)
 
-input1=$(cat << EOF
+INPUT1=$(cat << EOF
 {
     "AutoScalingGroupName": "$iaminstanceprofile",
     "MixedInstancesPolicy":
@@ -144,20 +136,7 @@ input1=$(cat << EOF
                 "Version": "1"
             },
             "Overrides":
-            [
-                {
-                    "InstanceType": "$instancetype1"
-                },
-                {
-                    "InstanceType": "$instancetype2"
-                },
-                {
-                    "InstanceType": "$instancetype3"
-                },
-                {
-                    "InstanceType": "$instancetype4"
-                }
-            ]
+             $INSTANCEDATA
         },
         "InstancesDistribution":
         {
@@ -180,8 +159,15 @@ EOF
 )
 ################################
 
-echo $input1 > /tmp/input1.json
+echo $INPUT1 > /tmp/input1.json
+
+cat /tmp/input1.json | jq '.'
+
+pwd 
+
+exit
 
 cd /tmp/
+
 
 aws autoscaling update-auto-scaling-group --cli-input-json file://input1.json

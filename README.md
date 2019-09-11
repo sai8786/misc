@@ -5,8 +5,7 @@ Background: When we create a cluster with KOPS, it will create launchconfig and 
 This will create a launch template from a launchconfig by using the values from Launch config and then later, it will update ASG with the instances type provided by the end user.
 
 
-
-Usage: ./createlaunchtemplate.sh -l "launchconfigname" -a "instancetype1" -b "instnacetype2" -c <instancetype3> -d <instancetype4>. 
+example: ./createlaunchtemplate.sh -l <launchconfigname> -i <instancetypes>
   
  
  Here, for the script you will have to provide the launchconfig you would like to use for grabbing the values from to create a launchtemplate. Also, you will need to provide the Instancetypes for the spot. 
